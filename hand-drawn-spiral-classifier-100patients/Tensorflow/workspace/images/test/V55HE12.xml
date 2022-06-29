@@ -1,0 +1,26 @@
+<annotation>
+	<folder>test</folder>
+	<filename>V55HE12.png</filename>
+	<path>C:\Users\rebec\Documents\git-repos\hand-tremor-detection\hand-drawn-spiral-classifier-100patients\Tensorflow\workspace\images\test\V55HE12.png</path>
+	<source>
+		<database>Unknown</database>
+	</source>
+	<size>
+		<width>256</width>
+		<height>256</height>
+		<depth>3</depth>
+	</size>
+	<segmented>0</segmented>
+	<object>
+		<name>center</name>
+		<pose>Unspecified</pose>
+		<truncated>0</truncated>
+		<difficult>0</difficult>
+		<bndbox>
+			<xmin>97</xmin>
+			<ymin>68</ymin>
+			<xmax>137</xmax>
+			<ymax>112</ymax>
+		</bndbox>
+	</object>
+</annotation>
