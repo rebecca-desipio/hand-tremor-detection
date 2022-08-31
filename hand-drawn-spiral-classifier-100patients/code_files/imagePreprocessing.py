@@ -9,19 +9,16 @@ import seaborn as sns # statistical data vis, used to plot the total count for e
 import os 
 import warnings
 
+warnings.filterwarnings('ignore')
+
 # libraries used to split the data and generate augmented images
 from sklearn.model_selection import train_test_split
-from keras.preprocessing.image import ImageDataGenerator
 from sklearn import utils
-
-import tensorflow as tf
 
 # image conversion and processing libraries
 import cv2
 import PIL
 from PIL import Image
-
-warnings.filterwarnings('ignore')
 
 
 # ----------------------------------------------------------------------
@@ -56,36 +53,6 @@ def importImages(dataset_folder):
     return df
 # --------------------------------------------------------------------------------------------------
 
-# function to split data into train, validation, and test
-def splitData(df):
-    # randomly split data in train and validation subsets (70-30 split)
-    # stratify attempts to keep the labels 50-50 in the validation data (i.e. 7 total 0's and 8 total 1's)
-    train_feature, val_feature, train_label, val_label = train_test_split(df['images'], df['label'], test_size=0.30, stratify=df['label'])
-
-    # shuffle data
-    train_feature, train_label = utils.shuffle(train_feature, train_label)
-    val_feature, val_label = utils.shuffle(val_feature, val_label)
-
-    ## (OPTIONAL) split validation data into validation and testing data
-    val_feature, test_feature, val_label, test_label = train_test_split(val_feature, val_label, test_size=0.5, shuffle=False)
-
-    # sort the test array so that all healthy images are first and PD images are last
-    # this is useful for later when plotting
-    testDF = pd.DataFrame()
-    testDF['img'] = test_feature
-    testDF['lbl'] = test_label
-    testDF = testDF.sort_values('lbl')
-
-    test_feature = testDF['img']
-    test_label   = testDF['lbl']
-
-    print("total validation samples: ", len(val_label))
-    print("total testing samples: ", len(test_label))
-    print('total training samples: ', len(train_label))
-
-    return train_feature, train_label, val_feature, val_label, test_feature, test_label
-# --------------------------------------------------------------------------------------------------
-
 # function to imgAug preprocessing, need to get data in desired form
 def imgAug_preprocessing(train_feature, val_feature, test_feature):
     # for each of the data sets (train, val, and test), convert from rgb to grayscale
@@ -111,68 +78,6 @@ def imgAug_preprocessing(train_feature, val_feature, test_feature):
     test_array  = img2array(test_feature)
 
     return train_array, val_array, test_array
-# --------------------------------------------------------------------------------------------------
-
-# function to perform data augmentation to have more data
-def imgAug(train_array, train_label, val_array, val_label, test_array, test_label):
-    ## -------------------------------------------------------------------
-    #       Artificially create more images for a bigger dataset
-    ## -------------------------------------------------------------------
-    # define functions to generate batches of data containing augmented images
-    # use for training data only
-    train_gen = ImageDataGenerator(
-        rescale=1./255,
-        rotation_range=180,
-        fill_mode='nearest',
-        brightness_range=[.4,1.4],
-        vertical_flip = True,
-        horizontal_flip = True
-    )
-
-    # use for validation and testing data (OPTIONAL: can make this different than training)
-    test_gen = ImageDataGenerator(
-        rescale=1./255,
-        rotation_range=180,
-        fill_mode='nearest',
-        brightness_range=[.4,1.4],
-        vertical_flip = True,
-        horizontal_flip = True
-    )
-
-    ## define function to artificially add more training, validation, and testing images
-    # takes as inputs the dataset array, dataset labels, and the number of additional augmented images per each original image
-    def generateAdditionalData(dataset_array, dataset_label, numImgs):
-        dataAug = []
-        dataAugLabel = []
-
-        # iterate through each image in the data_array and create more images with the features specified by ImageDataGenerator
-        for (idx,Lbl) in enumerate(dataset_label):
-            tempImg = np.expand_dims(dataset_array[idx], axis=0) # use for grayscale
-            # tempImg = train_array[idx]                         # use for rgb
-            aug = train_gen.flow(tempImg, batch_size=1, shuffle=True)
-            for addImages in range(numImgs):
-                augImg = next(aug)[0] #.astype('uint8')
-                if np.size(augImg) == 128**2:
-                    dataAug.append(augImg)
-                    dataAugLabel.append(Lbl)
-
-        return dataAug, dataAugLabel
-
-    trainAug, trainAugLabel = generateAdditionalData(train_array, train_label, 90)
-    valAug, valAugLabel     = generateAdditionalData(val_array, val_label, 90)
-    testAug, testAugLabel   = generateAdditionalData(test_array, test_label, 90)
-
-    # covert label array to binary class matrix (healthy, PD)
-    trainAugLabel = tf.keras.utils.to_categorical(np.array(trainAugLabel))
-    valAugLabel = tf.keras.utils.to_categorical(np.array(valAugLabel))
-    testAugLabel = tf.keras.utils.to_categorical(np.array(testAugLabel))
-
-    # shuffle data one last time
-    trainAug, trainAugLabel = utils.shuffle(trainAug, trainAugLabel)
-    valAug, valAugLabel = utils.shuffle(valAug, valAugLabel)
-    testAug, testAugLabel = utils.shuffle(testAug, testAugLabel)
-
-    return trainAug, trainAugLabel, valAug, valAugLabel, testAug, testAugLabel
 # --------------------------------------------------------------------------------------------------
 
 # define a function to plot augmented images

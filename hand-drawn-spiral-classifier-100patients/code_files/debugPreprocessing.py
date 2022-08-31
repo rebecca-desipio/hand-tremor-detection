@@ -101,5 +101,5 @@ def splitData(df):
     return train, trainLbls, val, valLbls, test, testLbls
 # --------------------------------------------------------------------------------------------------
 
-imgDF = importImages('datasets/Spiral_DataSet1_relabelled')
-_, _, _, _, test, testLbls = splitData(imgDF)
+# imgDF = importImages('datasets/Spiral_DataSet1_relabelled')
+# _, _, _, _, test, testLbls = splitData(imgDF)
