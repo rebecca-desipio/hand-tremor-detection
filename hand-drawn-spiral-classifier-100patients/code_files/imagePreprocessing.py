@@ -53,6 +53,43 @@ def importImages(dataset_folder):
     return df
 # --------------------------------------------------------------------------------------------------
 
+# function to import the images and create a dataframe
+# create three dataframes, one for train, val, and test individually
+def importSetImages(dataset_folder):
+    
+    # iterate through all images and create a binary array corresponding to the image labels
+    for data_use in os.listdir(dataset_folder): # data_use is either train, test, val
+
+        img_path = [] # store image paths for all images (original image size: 256x256)
+        label = []    # healthy (0) vs parkinsons (1)
+
+        for patient_type in os.listdir(dataset_folder + "/" + data_use): # patient type = 'healthy' or 'pd'
+            for img in os.listdir(dataset_folder + "/" + data_use + "/" + patient_type):
+                if patient_type == 'healthy':
+                    label.append(0)
+                else:
+                    label.append(1)
+                img_path.append(os.path.join(dataset_folder, data_use, patient_type, img))
+
+        if data_use == 'train':
+            # create the dataframe
+            df_train = pd.DataFrame()
+            df_train['images'] = img_path
+            df_train['label']  = label
+        elif data_use == 'val':
+            # create the dataframe
+            df_val = pd.DataFrame()
+            df_val['images'] = img_path
+            df_val['label']  = label
+        else:
+            # create the dataframe
+            df_test = pd.DataFrame()
+            df_test['images'] = img_path
+            df_test['label']  = label
+
+    return df_train, df_val, df_test
+# --------------------------------------------------------------------------------------------------
+
 # function to imgAug preprocessing, need to get data in desired form
 def imgAug_preprocessing(train_feature, val_feature, test_feature):
     # for each of the data sets (train, val, and test), convert from rgb to grayscale
