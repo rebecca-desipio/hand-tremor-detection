@@ -52,6 +52,181 @@ def skeletonize_imgs(img):
     skeleton = skeletonize(img) * 255
 
     return skeleton
+# ----------------------------------------------------------------------------------
+
+# define a function to unravel the spiral
+def unravelSpiral(skel_img): # not using obj detection
+    # find a first point on the spiral
+    notOnSpiral = True
+
+    halfpt = int(np.shape(skel_img)[0] / 2) # go halfway down the image, and iterate over until hit the spiral
+    for i in range(len(skel_img)):
+        if skel_img[halfpt][i] == 255:
+            c = [halfpt, i]
+            break
+    
+
+    row = c[0]
+    col = c[1]
+    # while notOnSpiral:
+    #     if skel_img[row][col] == 255:
+    #         onSpiral = [row, col]
+    #         notOnSpiral = False
+    #     else:
+    #         row = row-1
+
+    onSpiral = [row, col]
+    # ----------------------
+    # find the starting point of the spiral
+    notAtStart = True
+    checkRight = True
+    row = onSpiral[0]
+    col = onSpiral[1]
+    prevRow = 0
+    prevCol = 0
+    while notAtStart:
+        # print('Current RowCol: ', [row, col])
+
+        # check the top row (L to R)
+        if (skel_img[row-1][col-1] == 255) & ([row-1,col-1] != [prevRow, prevCol]):
+            prevRow = row
+            prevCol = col
+            row = row-1
+            col = col-1
+        elif (skel_img[row-1][col] == 255) & ([row-1,col] != [prevRow, prevCol]):
+            prevRow = row
+            prevCol = col
+            row = row-1
+            col = col
+        elif (skel_img[row-1][col+1] == 255) & ([row-1,col+1] != [prevRow, prevCol]):
+            prevRow = row
+            prevCol = col
+            row = row-1
+            col = col+1
+
+        # check to the right (R to BR)
+        elif (skel_img[row][col+1] == 255) & ([row,col+1] != [prevRow, prevCol]):
+            prevRow = row
+            prevCol = col
+            row = row
+            col = col+1
+        elif (skel_img[row+1][col+1] == 255) & ([row+1,col+1] != [prevRow, prevCol]):
+            prevRow = row
+            prevCol = col
+            row = row+1
+            col = col+1
+
+        # check below (R to L)
+        elif (skel_img[row+1][col] == 255) & ([row+1,col] != [prevRow, prevCol]):
+            prevRow = row
+            prevCol = col
+            row = row+1
+            col = col
+        elif (skel_img[row+1][col-1] == 255) & ([row+1,col-1] != [prevRow, prevCol]):
+            prevRow = row
+            prevCol = col
+            row = row+1
+            col = col-1
+
+        # check to the left
+        elif (skel_img[row][col-1] == 255) & ([row,col-1] != [prevRow, prevCol]):
+            prevRow = row
+            prevCol = col
+            row = row
+            col = col-1
+
+        # if none of the above, it is the end point
+        else:
+            notAtStart = False
+
+    startPt = np.array([row,col])
+    print('Center Point: ', startPt)
+    # ----------------------
+
+    # # ----------------------
+    # xy_coords = np.argwhere(skel_img == 255)
+    # distance_to_center = []
+
+    # # compute the distances to the starting point of the spiral
+    # for i in range(len(xy_coords)):
+
+    #     # calculate euclidean distance
+    #     dist = np.sqrt((xy_coords[i][0] - startPt[0])**2 + (xy_coords[i][1] - startPt[1])**2)
+    #     distance_to_center.append(dist)
+    # # ----------------------
+    # test = np.sort(distance_to_center)
+
+    return startPt #test
+
+def calcDist_to_center(img, c):
+    dist_to_center = []
+    # find the starting point of the spiral
+    notAtEnd = True
+    row = c[0]
+    col = c[1]
+    prevRow = 0
+    prevCol = 0
+    while notAtEnd: # iterate around CCW
+        print('Current RowCol: ', [row, col])
+
+        # check the top row (R to L)
+        if (img[row-1][col+1] == 255) & ([row-1,col+1] != [prevRow, prevCol]):
+            prevRow = row
+            prevCol = col
+            row = row-1
+            col = col+1
+        elif (img[row-1][col] == 255) & ([row-1,col] != [prevRow, prevCol]):
+            prevRow = row
+            prevCol = col
+            row = row-1
+            col = col
+        elif (img[row-1][col-1] == 255) & ([row-1,col-1] != [prevRow, prevCol]):
+            prevRow = row
+            prevCol = col
+            row = row-1
+            col = col-1
+
+        # check to the left (L to BL)
+        elif (img[row][col-1] == 255) & ([row,col-1] != [prevRow, prevCol]):
+            prevRow = row
+            prevCol = col
+            row = row
+            col = col-1
+        elif (img[row+1][col-1] == 255) & ([row+1,col-1] != [prevRow, prevCol]):
+            prevRow = row
+            prevCol = col
+            row = row+1
+            col = col-1
+
+        # check below (B to BR)
+        elif (img[row+1][col] == 255) & ([row+1,col] != [prevRow, prevCol]):
+            prevRow = row
+            prevCol = col
+            row = row+1
+            col = col
+        elif (img[row+1][col+1] == 255) & ([row+1,col+1] != [prevRow, prevCol]):
+            prevRow = row
+            prevCol = col
+            row = row+1
+            col = col+1
+
+        # check to the right
+        elif (img[row][col+1] == 255) & ([row,col+1] != [prevRow, prevCol]):
+            prevRow = row
+            prevCol = col
+            row = row
+            col = col+1
+
+        # if none of the above, it is the end point
+        else:
+            notAtEnd = False
+
+        # calculate the distance to the center and store in array
+        # row is x, col is y
+        dist = np.sqrt((row - c[0])**2 + (col - c[1])**2)
+        dist_to_center.append(dist)   
+
+    return dist_to_center
 
 
     
