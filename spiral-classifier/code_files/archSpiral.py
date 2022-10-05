@@ -166,65 +166,81 @@ def calcDist_to_center(img, c):
     col = c[1]
     prevRow = 0
     prevCol = 0
+
+    pixelLoc = []
     while notAtEnd: # iterate around CCW
         print('Current RowCol: ', [row, col])
 
         # check the top row (R to L)
         if (img[row-1][col+1] == 255) & ([row-1,col+1] != [prevRow, prevCol]):
-            prevRow = row
-            prevCol = col
-            row = row-1
-            col = col+1
-        elif (img[row-1][col] == 255) & ([row-1,col] != [prevRow, prevCol]):
-            prevRow = row
-            prevCol = col
-            row = row-1
-            col = col
-        elif (img[row-1][col-1] == 255) & ([row-1,col-1] != [prevRow, prevCol]):
-            prevRow = row
-            prevCol = col
-            row = row-1
-            col = col-1
+            pixelLoc.append('TR')
+        if (img[row-1][col] == 255) & ([row-1,col] != [prevRow, prevCol]):
+            pixelLoc.append('T')
+        if (img[row-1][col-1] == 255) & ([row-1,col-1] != [prevRow, prevCol]):
+            pixelLoc.append('TL')
 
         # check to the left (L to BL)
-        elif (img[row][col-1] == 255) & ([row,col-1] != [prevRow, prevCol]):
-            prevRow = row
-            prevCol = col
-            row = row
-            col = col-1
-        elif (img[row+1][col-1] == 255) & ([row+1,col-1] != [prevRow, prevCol]):
-            prevRow = row
-            prevCol = col
-            row = row+1
-            col = col-1
+        if (img[row][col-1] == 255) & ([row,col-1] != [prevRow, prevCol]):
+            pixelLoc.append('L')
+        if (img[row+1][col-1] == 255) & ([row+1,col-1] != [prevRow, prevCol]):
+            pixelLoc.append('BL')
 
         # check below (B to BR)
-        elif (img[row+1][col] == 255) & ([row+1,col] != [prevRow, prevCol]):
-            prevRow = row
-            prevCol = col
-            row = row+1
-            col = col
-        elif (img[row+1][col+1] == 255) & ([row+1,col+1] != [prevRow, prevCol]):
-            prevRow = row
-            prevCol = col
-            row = row+1
-            col = col+1
+        if (img[row+1][col] == 255) & ([row+1,col] != [prevRow, prevCol]):
+            pixelLoc.append('B')
+        if (img[row+1][col+1] == 255) & ([row+1,col+1] != [prevRow, prevCol]):
+            pixelLoc.append('BR')
 
         # check to the right
-        elif (img[row][col+1] == 255) & ([row,col+1] != [prevRow, prevCol]):
-            prevRow = row
-            prevCol = col
-            row = row
-            col = col+1
+        if (img[row][col+1] == 255) & ([row,col+1] != [prevRow, prevCol]):
+            pixelLoc.append('R')
 
         # if none of the above, it is the end point
-        else:
+        if pixelLoc == []:
             notAtEnd = False
+
+        else:
+            # set the prev row and col pixel locations
+            prevRow = row
+            prevCol = col
+
+            if len(pixelLoc) == 1:
+                loc = pixelLoc[0]
+            else:
+                loc = pixelLoc[1]
+
+            if loc == 'TR':
+                row = row-1
+                col = col+1
+            elif loc == 'T':
+                row=row-1
+                col=col
+            elif loc == 'TL':
+                row=row-1
+                col=col-1
+            elif loc == 'L':
+                row=row
+                col=col-1
+            elif loc == 'BL':
+                row=row+1
+                col=col-1
+            elif loc == 'B':
+                row=row+1
+                col=col
+            elif loc == 'BR':
+                row=row+1
+                col=col+1
+            elif loc == 'R':
+                row=row
+                col=col+1
 
         # calculate the distance to the center and store in array
         # row is x, col is y
         dist = np.sqrt((row - c[0])**2 + (col - c[1])**2)
         dist_to_center.append(dist)   
+
+        pixelLoc = []
+        
 
     return dist_to_center
 
