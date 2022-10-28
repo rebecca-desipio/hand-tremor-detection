@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import os
 
 # read in the file
-file = cv2.imread('C:/Users/Rebecca/Documents/Virginia_Tech/Research/git-repos/hand-tremor-detection/spiral-classifier/datasets/handPD_new/test/healthy/sp1-H1.jpg', 1)
+file = cv2.imread('C:/Users/Rebecca/Documents/Virginia_Tech/Research/git-repos/hand-tremor-detection/spiral-classifier/datasets/handPD_new/test/healthy/sp3-H22.jpg', 1)
 print(np.shape(file))
 # plt.matshow(file)
 # plt.show()

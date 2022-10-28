@@ -169,7 +169,7 @@ def calcDist_to_center(img, c):
 
     pixelLoc = []
     while notAtEnd: # iterate around CCW
-        print('Current RowCol: ', [row, col])
+        # print('Current RowCol: ', [row, col])
 
         # check the top row (R to L)
         if (img[row-1][col+1] == 255) & ([row-1,col+1] != [prevRow, prevCol]):
