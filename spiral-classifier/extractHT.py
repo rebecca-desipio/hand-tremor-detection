@@ -1,6 +1,10 @@
-# This file is used to create a "new" dataset from the handPD_new data
+# *******************************
+# FILE DESCRIPTION
+
+# Create a "new" dataset from the handPD_new data
 # Set the folder path of the data to be extracted, and set the path for where the new images will be saved
-# Set the flag to the type of images being run (either HSV or heatmap)
+# **Set 'plotting' and 'save_file' flags**
+# *******************************
 
 # import libraries
 import numpy as np
@@ -10,7 +14,8 @@ import os
 
 # ----------------------------------------------------
 # iterate through all the images in the set folder
-plotting = 0 # set plotting flag
+plotting = 0  # set plotting flag (0 = no plotting, 1 = show plots)
+save_file = 0 # set save file flag (0 = don't save, 1 = save extracted images)
 
 path_origin = os.getcwd()
 data_path = '/spiral-classifier/datasets/handPD_HT/'
@@ -91,6 +96,7 @@ for img_name in os.listdir(folderpath):
     # ----------------------------------------
     # save final image in the set location
     # ----------------------------------------
-    save_location = save_folder_path + save_name
-    cv2.imwrite(save_location, final_img)
+    if save_file == 1:
+        save_location = save_folder_path + save_name
+        cv2.imwrite(save_location, final_img)
 

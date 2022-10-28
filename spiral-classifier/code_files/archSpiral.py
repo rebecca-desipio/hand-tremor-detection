@@ -1,3 +1,15 @@
+# *******************************
+# FILE DESCRIPTION
+
+# This file contains various functions to perform spiral manipulation (i.e. thinning, unravelling, etc.)
+# Functions in this file are:
+#   - generateIdealSpiral --> creates an ideal spiral from the archimedean spiral math model
+#   - skeletonize_imgs    --> performs skeletonization via binarization threshold
+#   - unravelSpiral       --> takes skeletonized images as input finds the center starting point
+#   - calcDist_to_center  --> takes skeletonized image as input and the starting point calculated from 'unravelSpiral'
+#                             and unravels the spiral where the x-axis would be sample points and the y-axis is 
+#                             R, or distance to the center
+# *******************************
 #!/usr/bin/python
 
 # import libraries
@@ -158,6 +170,7 @@ def unravelSpiral(skel_img): # not using obj detection
 
     return startPt #test
 
+# ----------------------------------------------------------------------------------
 def calcDist_to_center(img, c):
     dist_to_center = []
     # find the starting point of the spiral

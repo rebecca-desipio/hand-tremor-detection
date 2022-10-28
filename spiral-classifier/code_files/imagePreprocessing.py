@@ -1,5 +1,15 @@
-# this file contains functions to preprocess the images and augment as needed to 
-# feed into the model for training
+# *******************************
+# FILE DESCRIPTION
+
+# this file contains functions to preprocess the images and augment as needed to feed into the model for training
+
+# Functions contained include: 
+#   - importImages --> import all images (from PD and healthy folders) and create a dataframe (data not yet split as train and test)
+#   - importSetImages --> images already in train, test, val folders. import and create as dataframe
+#   - imgAug_preprocessing --> from the dataframes (which contain image paths), convert images to arrays
+#   - plotAugImgs --> can plot examples of what the augmented images look like
+#   - plotAugLbls --> plot the total number of labels for each class (shown as barplot)
+# *******************************
 
 # import libraries
 import pandas as pd

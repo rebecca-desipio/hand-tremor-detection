@@ -1,3 +1,14 @@
+# *******************************
+# FILE DESCRIPTION
+
+# This file contains the functions to plot the images as subplots
+# Functions in this file are:
+#   - plotImages            --> plots test images along with predicted labels from CNN
+#   - plotArchSpiralOverlay --> plots the ideal spiral overlaid with the hand-drawn images
+#   - plotSkelImgs          --> takes thinned images as input and plots them
+#   - plotCenters           --> plots images ran through objectDetection.ipynb with the calculated centers
+
+# *******************************
 # import libraries
 from tabnanny import verbose
 import numpy as np
@@ -92,6 +103,7 @@ def plotArchSpiralOverlay(test_array, label, archSpiral, testModel, avgError=Non
         
     plt.tight_layout()
     plt.show()
+# -------------------------
 
 def plotSkelImgs(origImg, skelImg):
     numrows = len(origImg)
