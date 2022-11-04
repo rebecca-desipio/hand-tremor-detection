@@ -152,7 +152,7 @@ def unravelSpiral(skel_img): # not using obj detection
             notAtStart = False
 
     startPt = np.array([row,col])
-    print('Center Point: ', startPt)
+    # print('Center Point: ', startPt)
     # ----------------------
 
     # # ----------------------
