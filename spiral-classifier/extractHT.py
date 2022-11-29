@@ -15,12 +15,12 @@ import os
 # ----------------------------------------------------
 # iterate through all the images in the set folder
 plotting = 0  # set plotting flag (0 = no plotting, 1 = show plots)
-save_file = 0 # set save file flag (0 = don't save, 1 = save extracted images)
+save_file = 1 # set save file flag (0 = don't save, 1 = save extracted images)
 
 path_origin = os.getcwd()
-data_path = '/spiral-classifier/datasets/handPD_HT/'
-folderpath = path_origin + data_path + 'train/healthy/' # set the folder path
-save_folder_path = path_origin + data_path + 'trainHT/healthy/'
+data_path = '/spiral-classifier/datasets/handPD_orig/'
+folderpath = path_origin + data_path + 'test/parkinsons/' # set the folder path
+save_folder_path = path_origin + data_path + 'testHT/parkinsons/'
 
 for img_name in os.listdir(folderpath):
     img_path = os.path.join(folderpath, img_name)
