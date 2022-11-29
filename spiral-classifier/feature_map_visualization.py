@@ -55,7 +55,7 @@ for dataType in os.listdir(data_path):
 
             # convert the image and store as a matrix
             drawing = cv2.imread(path)
-            drawing = cv2.resize(drawing, (256,256))
+            drawing = cv2.resize(drawing, (224,224))
 
             if dataType == 'test':
                 testArray.append(drawing)
@@ -80,8 +80,8 @@ for dataType in os.listdir(data_path):
         testImgs['label'] = lblName
 
 # shuffle the data
-trainImgs, trainArray, trainLbls = utils.shuffle(trainImgs, trainArray, trainLbls)
-testImgs, testArray, testLbls = utils.shuffle(testImgs, testArray, testLbls)
+# trainImgs, trainArray, trainLbls = utils.shuffle(trainImgs, trainArray, trainLbls)
+# testImgs, testArray, testLbls = utils.shuffle(testImgs, testArray, testLbls)
 
 # convert labels to categorical for training model
 trainLbls_categorical = tf.keras.utils.to_categorical(trainLbls)
@@ -97,10 +97,10 @@ display(testImgs.head())
 # %%
 
 # ******************************
-#     VISUALIZE FEATURE MAPS
+#         IMPORT MODEL
 # ******************************
 # import VGG16 or ResNet-50 pretrained model 
-model = VGG16(weights='imagenet', include_top=False,input_shape=(256,256,3)) # setting include_top=False removes the fully connected layers of the model
+model = ResNet50(weights='imagenet', include_top=False,input_shape=(256,256,3)) # setting include_top=False removes the fully connected layers of the model
 # model.summary()
 
 # summarize feature map shapes
@@ -112,15 +112,18 @@ for i in range(len(model.layers)):
 
 # %%
 
+# ******************************
+#     VISUALIZE FEATURE MAPS
+# ******************************
 # choose second conv block from each layer to display
-blocks = [2,5,9,13,17]
+blocks = [10,18,28,38,50]
 output_layers = [model.layers[i].output for i in blocks]
 # redefine model to output right after each conv layer
 vis_model = Model(inputs=model.inputs, outputs=output_layers)
 
 # select images to save visualizations for and put them in an array
 # manually choose two healthy and two parkinsons
-img2vis = np.array([trainArray[0], trainArray[1], trainArray[4], trainArray[6]])
+img2vis = np.array([trainArray[0], trainArray[8], trainArray[72], trainArray[88]])
 
 # iterate through each image and save the feature maps
 for i in range(4):
@@ -156,6 +159,56 @@ for i in range(4):
         fig.savefig(savename)
         plt.close()
         blocknum += 1
+        
+# %%
+
+# ***************************
+#       OBTAIN FILTERS
+# ***************************
+# retrieve weights from hidden layer
+filters, biases = model.layers[10].get_weights() # set the layer to visualize
+# normalize filter values to 0-1 to visualize them
+f_min, f_max = filters.min(), filters.max()
+filters = (filters - f_min) / (f_max - f_min)
+
+# plot first 8 filters
+n = 16
+fig, ax = plt.subplots(3,n, figsize=(50,10))
+title = 'ResNet50_filters_block_10'
+fig.suptitle(title)
+for i in range(n):
+    # get the filter
+    f = filters[:,:,:,i]
+    # plot each channel seperately
+    for j in range(3):
+        ax[j][i].imshow(f[:,:,j],cmap='gray')
+
+savename = title + '.png'
+print(savename)
+fig.savefig(savename)
+plt.close()
+
+# %%
+
+# ******************************************************************************************************
+# ------------------------------------------------------------------------------------------------------
+#                                           CLASSIFICATION  
+# ------------------------------------------------------------------------------------------------------
+# ******************************************************************************************************
+
+# 1. VGG16 or RestNet50
+# 2. SVM
+# 3. Naive Bayes
+# 4. Random Forest
+
+# %%
+
+# =============================
+#       VGG16 or ResNet50
+# =============================
+pt_model = VGG16() # setting include_top=False removes the fully connected layers of the model
+pt_model.summary()
+
 
 
 
