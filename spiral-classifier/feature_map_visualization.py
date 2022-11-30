@@ -36,7 +36,7 @@ from code_files.imagePreprocessing import *
 # ********************************
 # import images (and labels) and store in dataframe
 # FLAG: set the path to the desired dataset
-data_path = 'datasets/handPD_orig_HT/'  
+data_path = 'datasets/handPD_balanced/'  
 
 trainImgs = pd.DataFrame()
 testImgs  = pd.DataFrame()
@@ -55,7 +55,7 @@ for dataType in os.listdir(data_path):
 
             # convert the image and store as a matrix
             drawing = cv2.imread(path)
-            drawing = cv2.resize(drawing, (224,224))
+            drawing = cv2.resize(drawing, (256,256))
 
             if dataType == 'test':
                 testArray.append(drawing)
@@ -79,20 +79,19 @@ for dataType in os.listdir(data_path):
         testImgs['image'] = img_path
         testImgs['label'] = lblName
 
+
 # shuffle the data
 # trainImgs, trainArray, trainLbls = utils.shuffle(trainImgs, trainArray, trainLbls)
-# testImgs, testArray, testLbls = utils.shuffle(testImgs, testArray, testLbls)
 
 # convert labels to categorical for training model
 trainLbls_categorical = tf.keras.utils.to_categorical(trainLbls)
-print("Labels of first 5 images: \n", trainLbls_categorical[0:5])
+# print("Labels of first 5 images: \n", trainLbls_categorical[0:5])
 
-# display first five images
-print("Lables of first train 5 images: ", trainLbls[0:5])
-display(trainImgs.head())
+# used in the feature extraction section
+numImgs = len(trainLbls)
+print("Total number of images: ", numImgs)
 
-print("Test labels: ", testLbls[0:5])
-display(testImgs.head())
+sns.countplot(trainLbls)
 
 # %%
 
@@ -101,7 +100,7 @@ display(testImgs.head())
 # ******************************
 # import VGG16 or ResNet-50 pretrained model 
 model = ResNet50(weights='imagenet', include_top=False,input_shape=(256,256,3)) # setting include_top=False removes the fully connected layers of the model
-# model.summary()
+model.summary()
 
 # summarize feature map shapes
 for i in range(len(model.layers)):
@@ -201,15 +200,175 @@ plt.close()
 # 3. Naive Bayes
 # 4. Random Forest
 
+# .........................
+#    FEATURE EXTRACTION
+# .........................
+# define a function that will extract the features from conv network
+def extract_features(imgs, num_imgs):
+    datagen = ImageDataGenerator(rescale=1./255) # define to rescale pixels in image
+    batch_size = 10
+    
+    features = np.zeros(shape=(num_imgs, 8,8,512)) # shape equal to output of convolutional base
+    lbls = np.zeros(shape=(num_imgs,2))
+
+    # preprocess data
+    generator = datagen.flow_from_dataframe(imgs, x_col = 'image', y_col='label', target_size=(256,256), class_mode='categorical', batch_size=batch_size)
+
+    # Pass data through convolutional base
+    i = 0
+    for inputs_batch, labels_batch in generator:
+        features_batch = model.predict(inputs_batch)
+        features[i * batch_size: (i + 1) * batch_size] = features_batch
+        lbls[i * batch_size: (i + 1) * batch_size] = labels_batch
+        i += 1
+        if i * batch_size >= num_imgs:
+            break
+    return features, lbls
+
+# extract features for both the trainImgs and testImgs
+train_feat, train_lbls = extract_features(trainImgs, numImgs)
+
+train_feat, test_feat, train_lbls, test_lbls = train_test_split(train_feat, train_lbls, test_size=0.2, random_state=10)
+trainArray, testArray, _,_ = train_test_split(trainArray, trainLbls, test_size=0.2, random_state=10)
+
+fig, ax = plt.subplots(1,2, figsize=(8,3))
+sns.countplot(train_lbls[:,1], ax=ax[0])
+sns.countplot(test_lbls[:,1], ax=ax[1])
+
 # %%
 
 # =============================
 #       VGG16 or ResNet50
 # =============================
-pt_model = VGG16() # setting include_top=False removes the fully connected layers of the model
-pt_model.summary()
+# evaluate on VGG16 classifier (using cross validation)
+# define a function that will fit the model
+def defineModel(size): # size is the dimension of the last layer in the pretrained model
+    model = Sequential()
+    model.add(GlobalAveragePooling2D(input_shape=(size,size,512)))
+    # global average pooling is used instead of fully connected layers on top of the feature maps
+    # it takes the average of each feature map and the resulting layer is fed directly into the softmax layer
+    model.add(Dense(2, activation='softmax'))
+    model.summary()
 
+    opt = tf.keras.optimizers.Adam(learning_rate=1e-3)  # use the Adam optimizer and set an effective learning rate 
+    model.compile(optimizer=opt, loss='categorical_crossentropy', metrics=['accuracy'])
+    return model
 
+# train the model using cross validation
+# will start with k-fold cross validation, taking 80% as training each fold
 
+# define model checkpoint callback
+model_chkpt = tf.keras.callbacks.ModelCheckpoint('20221129_VGG16_kfold_handPD_orig__HT_rs10.h5', verbose=0, save_best_only=True)
 
+def fit_and_evaluate(train_feat, train_lbls, val_feat, val_lbls, test_feat, test_lbls, epochs):
+    model = None
+    model = defineModel(8) # FLAG: need to set the size based on the last layer
+    trained_model = model.fit(train_feat, train_lbls, batch_size=10, epochs=epochs, validation_data=(val_feat, val_lbls), callbacks=model_chkpt, verbose=0)
+
+    # testScore = model.evaluate(test_feat, test_lbls)
+    return trained_model
+
+# train with k-fold validation
+model_history = []
+epochs = 250
+
+num_val_samples = int(np.ceil(len(trainArray) * 0.20))
+k = int(np.floor(len(trainArray) / num_val_samples))
+
+for i in range(k):
+    print("Training on fold K = ", i+1)
+    startPt = i * num_val_samples
+    endPt   = (i+1) * num_val_samples
+
+    if endPt > len(train_feat):
+        endPt = len(train_feat)
+
+    val_x = train_feat[startPt:endPt]
+    val_y = train_lbls[startPt:endPt]
+    train_x = np.delete(train_feat, np.linspace(startPt, endPt-1, num_val_samples).astype(np.int), axis=0)
+    train_y = np.delete(train_lbls, np.linspace(startPt, endPt-1, num_val_samples).astype(np.int), axis=0)
+
+    model_history.append(fit_and_evaluate(train_x, train_y, val_x, val_y, test_feat, test_lbls, epochs=epochs))
+    # print(model_history)
+    
+    print("======="*12, end="\n")
+
+# %%
+
+# ...............
+# VIEW RESULTS
+# ...............   
+
+new_model = True # FLAG
+
+if new_model==True:
+    # plot the accuracy and loss functions for each fold
+    color = ['blue', 'black', 'red', 'green','orange', 'cyan', 'grey', 'yellow', 'fuchsia']
+    f, ax = plt.subplots(2, k, figsize=(35,6))
+    for i in range(k):
+        ax[0][i].plot(model_history[i].history['accuracy'], label='train acc', color=color[i])
+        ax[0][i].plot(model_history[i].history['val_accuracy'], label='val acc', linestyle= ':', color=color[i])
+        ax[0][i].axis([-10,epochs, .2, 1.1])
+        ax[0][i].legend()
+
+        subplot_title = 'k = ' + str(i+1)
+        ax[0][i].title.set_text(subplot_title)
+
+    for i in range(k):
+        ax[1][i].plot(model_history[i].history['loss'], label='train loss', color=color[i])
+        ax[1][i].plot(model_history[i].history['val_loss'], label='val loss', linestyle= ':', color=color[i])
+        ax[1][i].axis([-10,epochs, .0, 1.1])
+        ax[1][i].legend()
+
+# ---------------------------------------------------------------------------------------
+#                             LOAD PRE-EXISTING MODEL MODEL
+# ---------------------------------------------------------------------------------------
+def importModel(filename, testAug, testAugLabel):
+    modelPath = 'savedModels/saved_h5_models/' + filename
+    testModel = tf.keras.models.load_model(modelPath)
+
+    loss, acc = testModel.evaluate(np.array(testAug), testAugLabel, verbose=2)
+    print("Loss: ", loss, "| Accuracy: ", acc)
+
+    return testModel
+
+# load existing model and evaluate the test data
+testmodel = importModel('20221129_VGG16_kfold_handPD_orig_HT_rs10.h5', test_feat, test_lbls)
+
+# %%
+
+# SHOW THE MISCLASSIFIED IMAGES
+
+def plotMisclassImgs(testModel, test_feat, test_label, test_array):
+    test_label = np.array(test_label)
+    incorrectImgs = []
+    incorrectImgIdx = []
+
+    count = 0
+    fig, axes = plt.subplots(3, 8, figsize=(20,8))
+    axes = axes.flatten()
+    for img, ax in zip(test_array, axes):
+        ax.imshow(np.squeeze(img), cmap="gray") # plot image
+
+        # use the model to predict the label
+        predImg = testModel.predict(np.expand_dims(test_feat[count], axis=0), verbose=0) # use for grayscale
+        # predImg = testModel.predict(test_feat[count])                       # use for RGB
+        predLabel = np.argmax(predImg[0])       
+        
+        if test_label[count] != predLabel:
+            ax.set_title('Label: ' + str(test_label[count]) + ' | Pred: ' + str(predLabel), color='red')
+            # save off image to array
+            incorrectImgs.append(test_array[count])
+            incorrectImgIdx.append(count)
+        else:
+            ax.set_title('Label: ' + str(test_label[count]) + ' | Pred: ' + str(predLabel), color = 'blue')  
+
+        count = count + 1
+        
+    plt.tight_layout()
+
+    return np.array(incorrectImgs), np.array(incorrectImgIdx), testModel.predict(test_feat)
+
+# plot the results
+misClass_test, misClass_idx, predictions = plotMisclassImgs(testmodel, test_feat, np.argmax(test_lbls, axis=1), testArray)
 # %%
