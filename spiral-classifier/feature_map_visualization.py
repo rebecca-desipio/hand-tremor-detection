@@ -36,13 +36,10 @@ from code_files.imagePreprocessing import *
 # ********************************
 # import images (and labels) and store in dataframe
 # FLAG: set the path to the desired dataset
-data_path = 'datasets/handPD_balanced/'  
+data_path = 'datasets/handPD_bal_HT/'  
 
 trainImgs = pd.DataFrame()
-testImgs  = pd.DataFrame()
 trainArray = []
-testArray  = []
-
 
 for dataType in os.listdir(data_path):
     img_path = []
@@ -57,9 +54,7 @@ for dataType in os.listdir(data_path):
             drawing = cv2.imread(path)
             drawing = cv2.resize(drawing, (256,256))
 
-            if dataType == 'test':
-                testArray.append(drawing)
-            else:
+            if dataType == 'train':
                 trainArray.append(drawing)
 
             # store the labels
@@ -74,10 +69,6 @@ for dataType in os.listdir(data_path):
         trainLbls = lbl
         trainImgs['image'] = img_path
         trainImgs['label'] = lblName
-    else:
-        testLbls = lbl
-        testImgs['image'] = img_path
-        testImgs['label'] = lblName
 
 
 # shuffle the data
@@ -206,9 +197,9 @@ plt.close()
 # define a function that will extract the features from conv network
 def extract_features(imgs, num_imgs):
     datagen = ImageDataGenerator(rescale=1./255) # define to rescale pixels in image
-    batch_size = 10
+    batch_size = 32
     
-    features = np.zeros(shape=(num_imgs, 8,8,512)) # shape equal to output of convolutional base
+    features = np.zeros(shape=(num_imgs, 8,8,2048)) # shape equal to output of convolutional base
     lbls = np.zeros(shape=(num_imgs,2))
 
     # preprocess data
@@ -228,8 +219,8 @@ def extract_features(imgs, num_imgs):
 # extract features for both the trainImgs and testImgs
 train_feat, train_lbls = extract_features(trainImgs, numImgs)
 
-train_feat, test_feat, train_lbls, test_lbls = train_test_split(train_feat, train_lbls, test_size=0.2, random_state=10)
-trainArray, testArray, _,_ = train_test_split(trainArray, trainLbls, test_size=0.2, random_state=10)
+train_feat, test_feat, train_lbls, test_lbls = train_test_split(train_feat, train_lbls, test_size=0.2, random_state=42)
+trainArray, testArray, _,_ = train_test_split(trainArray, trainLbls, test_size=0.2, random_state=42)
 
 fig, ax = plt.subplots(1,2, figsize=(8,3))
 sns.countplot(train_lbls[:,1], ax=ax[0])
@@ -244,7 +235,7 @@ sns.countplot(test_lbls[:,1], ax=ax[1])
 # define a function that will fit the model
 def defineModel(size): # size is the dimension of the last layer in the pretrained model
     model = Sequential()
-    model.add(GlobalAveragePooling2D(input_shape=(size,size,512)))
+    model.add(GlobalAveragePooling2D(input_shape=(size,size,2048)))
     # global average pooling is used instead of fully connected layers on top of the feature maps
     # it takes the average of each feature map and the resulting layer is fed directly into the softmax layer
     model.add(Dense(2, activation='softmax'))
@@ -258,12 +249,12 @@ def defineModel(size): # size is the dimension of the last layer in the pretrain
 # will start with k-fold cross validation, taking 80% as training each fold
 
 # define model checkpoint callback
-model_chkpt = tf.keras.callbacks.ModelCheckpoint('20221129_VGG16_kfold_handPD_orig__HT_rs10.h5', verbose=0, save_best_only=True)
+model_chkpt = tf.keras.callbacks.ModelCheckpoint('20221130_rn50_kfold_handPD_bal_HT_bs32_rs42.h5', verbose=0, save_best_only=True)
 
-def fit_and_evaluate(train_feat, train_lbls, val_feat, val_lbls, test_feat, test_lbls, epochs):
+def fit_and_evaluate(train_feat, train_lbls, val_feat, val_lbls, epochs):
     model = None
     model = defineModel(8) # FLAG: need to set the size based on the last layer
-    trained_model = model.fit(train_feat, train_lbls, batch_size=10, epochs=epochs, validation_data=(val_feat, val_lbls), callbacks=model_chkpt, verbose=0)
+    trained_model = model.fit(train_feat, train_lbls, batch_size=32, epochs=epochs, validation_data=(val_feat, val_lbls), callbacks=model_chkpt, verbose=0)
 
     # testScore = model.evaluate(test_feat, test_lbls)
     return trained_model
@@ -288,7 +279,7 @@ for i in range(k):
     train_x = np.delete(train_feat, np.linspace(startPt, endPt-1, num_val_samples).astype(np.int), axis=0)
     train_y = np.delete(train_lbls, np.linspace(startPt, endPt-1, num_val_samples).astype(np.int), axis=0)
 
-    model_history.append(fit_and_evaluate(train_x, train_y, val_x, val_y, test_feat, test_lbls, epochs=epochs))
+    model_history.append(fit_and_evaluate(train_x, train_y, val_x, val_y, epochs=epochs))
     # print(model_history)
     
     print("======="*12, end="\n")
@@ -333,7 +324,7 @@ def importModel(filename, testAug, testAugLabel):
     return testModel
 
 # load existing model and evaluate the test data
-testmodel = importModel('20221129_VGG16_kfold_handPD_orig_HT_rs10.h5', test_feat, test_lbls)
+testmodel = importModel('20221130_rn50_kfold_handPD_bal_HT_bs32_rs42.h5', test_feat, test_lbls)
 
 # %%
 
@@ -345,7 +336,7 @@ def plotMisclassImgs(testModel, test_feat, test_label, test_array):
     incorrectImgIdx = []
 
     count = 0
-    fig, axes = plt.subplots(3, 8, figsize=(20,8))
+    fig, axes = plt.subplots(3, 17, figsize=(40,10))
     axes = axes.flatten()
     for img, ax in zip(test_array, axes):
         ax.imshow(np.squeeze(img), cmap="gray") # plot image
@@ -372,3 +363,6 @@ def plotMisclassImgs(testModel, test_feat, test_label, test_array):
 # plot the results
 misClass_test, misClass_idx, predictions = plotMisclassImgs(testmodel, test_feat, np.argmax(test_lbls, axis=1), testArray)
 # %%
+# =============================
+#             SVM
+# =============================
