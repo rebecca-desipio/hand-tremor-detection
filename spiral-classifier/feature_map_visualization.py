@@ -13,8 +13,8 @@ import cv2
 import PIL
 
 # import ML/DL libraries
-from sklearn.model_selection import train_test_split
-from sklearn import utils # used to shuffle data
+from sklearn.model_selection import train_test_split, GridSearchCV
+from sklearn import utils, svm, metrics # used to shuffle data
 
 from keras.preprocessing.image import ImageDataGenerator # used for image augmentation
 from tensorflow.keras.applications.inception_v3 import preprocess_input
@@ -29,14 +29,16 @@ from keras.applications import VGG16, ResNet50
 # import functions from other python files
 from code_files.imagePreprocessing import * 
 
-# %%
+print('done importing libraries')
 
+# %%
+print('importing images...')
 # ********************************
 #           IMPORT IMAGES
 # ********************************
 # import images (and labels) and store in dataframe
 # FLAG: set the path to the desired dataset
-data_path = 'datasets/handPD_bal_HT/'  
+data_path = 'datasets/handPD_orig_HT/'  
 
 trainImgs = pd.DataFrame()
 trainArray = []
@@ -52,7 +54,7 @@ for dataType in os.listdir(data_path):
 
             # convert the image and store as a matrix
             drawing = cv2.imread(path)
-            drawing = cv2.resize(drawing, (256,256))
+            drawing = cv2.resize(drawing, (224,224))
 
             if dataType == 'train':
                 trainArray.append(drawing)
@@ -90,7 +92,7 @@ sns.countplot(trainLbls)
 #         IMPORT MODEL
 # ******************************
 # import VGG16 or ResNet-50 pretrained model 
-model = ResNet50(weights='imagenet', include_top=False,input_shape=(256,256,3)) # setting include_top=False removes the fully connected layers of the model
+model = ResNet50(weights='imagenet', include_top=False,input_shape=(224,224,3)) # setting include_top=False removes the fully connected layers of the model
 model.summary()
 
 # summarize feature map shapes
@@ -106,7 +108,7 @@ for i in range(len(model.layers)):
 #     VISUALIZE FEATURE MAPS
 # ******************************
 # choose second conv block from each layer to display
-blocks = [10,18,28,38,50]
+blocks = [10,28,50,80, 112, 132, 174]
 output_layers = [model.layers[i].output for i in blocks]
 # redefine model to output right after each conv layer
 vis_model = Model(inputs=model.inputs, outputs=output_layers)
@@ -127,12 +129,12 @@ for i in range(4):
         # determine the number of images to plot
         if fmap_size[3]==64:
             rows=8;cols=8
-        elif fmap_size[3]==128:
-            rows=16; cols=8
-        elif fmap_size[3]==256:
-            rows=16;cols=16
+        # elif fmap_size[3]==128:
+        #     rows=16; cols=8
+        # elif fmap_size[3]==256:
+        #     rows=16;cols=16
         else:
-            rows=32;cols=16
+            rows=8;cols=8
 
         itr = 1
         fig, ax = plt.subplots(rows,cols, figsize=(50,50))
@@ -199,11 +201,11 @@ def extract_features(imgs, num_imgs):
     datagen = ImageDataGenerator(rescale=1./255) # define to rescale pixels in image
     batch_size = 32
     
-    features = np.zeros(shape=(num_imgs, 8,8,2048)) # shape equal to output of convolutional base
+    features = np.zeros(shape=(num_imgs, 7,7,2048)) # shape equal to output of convolutional base
     lbls = np.zeros(shape=(num_imgs,2))
 
     # preprocess data
-    generator = datagen.flow_from_dataframe(imgs, x_col = 'image', y_col='label', target_size=(256,256), class_mode='categorical', batch_size=batch_size)
+    generator = datagen.flow_from_dataframe(imgs, x_col = 'image', y_col='label', target_size=(224,224), class_mode='categorical', batch_size=batch_size)
 
     # Pass data through convolutional base
     i = 0
@@ -219,6 +221,12 @@ def extract_features(imgs, num_imgs):
 # extract features for both the trainImgs and testImgs
 train_feat, train_lbls = extract_features(trainImgs, numImgs)
 
+# %%
+
+# =============================
+#       VGG16 or ResNet50
+# =============================
+# split into training and testing data
 train_feat, test_feat, train_lbls, test_lbls = train_test_split(train_feat, train_lbls, test_size=0.2, random_state=42)
 trainArray, testArray, _,_ = train_test_split(trainArray, trainLbls, test_size=0.2, random_state=42)
 
@@ -226,11 +234,6 @@ fig, ax = plt.subplots(1,2, figsize=(8,3))
 sns.countplot(train_lbls[:,1], ax=ax[0])
 sns.countplot(test_lbls[:,1], ax=ax[1])
 
-# %%
-
-# =============================
-#       VGG16 or ResNet50
-# =============================
 # evaluate on VGG16 classifier (using cross validation)
 # define a function that will fit the model
 def defineModel(size): # size is the dimension of the last layer in the pretrained model
@@ -311,9 +314,9 @@ if new_model==True:
         ax[1][i].axis([-10,epochs, .0, 1.1])
         ax[1][i].legend()
 
-# ---------------------------------------------------------------------------------------
-#                             LOAD PRE-EXISTING MODEL MODEL
-# ---------------------------------------------------------------------------------------
+# ---------------------------------
+#   LOAD PRE-EXISTING MODEL MODEL
+# ---------------------------------
 def importModel(filename, testAug, testAugLabel):
     modelPath = 'savedModels/saved_h5_models/' + filename
     testModel = tf.keras.models.load_model(modelPath)
@@ -362,7 +365,80 @@ def plotMisclassImgs(testModel, test_feat, test_label, test_array):
 
 # plot the results
 misClass_test, misClass_idx, predictions = plotMisclassImgs(testmodel, test_feat, np.argmax(test_lbls, axis=1), testArray)
+
 # %%
 # =============================
 #             SVM
 # =============================
+
+# create SVM classifier
+def SVM_classifier(train_data, train_labels, val_data, val_labels):
+
+    # clf = svm.SVC(kernel='poly', degree=5)
+    # param_grid={'C':[0.1,5,10,100],'degree':[2,5,7,10],'kernel':['rbf','poly']}
+    clf = svm.SVC(kernel='rbf', C=.1)
+    # clf = GridSearchCV(clf, param_grid)
+
+    # train model
+    # clf.fit(train_data, train_labels)
+    clf.fit(train_data, train_labels)
+
+    # clf.best_params_
+    # print(clf.best_params_)
+
+    # predict the model
+    pred = (clf.predict(val_data))
+
+    # calculate accuracy
+    acc = round(metrics.accuracy_score(pred, val_labels),4)
+
+    print("The predicted data is: ", pred)
+    print("The actual data is: ", np.array(val_labels))
+    print(f"The model is {acc*100}% accurate")
+
+    return acc, pred
+
+# svm_acc = []
+
+# for ii in range(0,10):
+#     temp_acc, svm_pred = SVM_classifier(train_feat_flat, train_lbls)
+#     svm_acc.append(temp_acc)
+
+# print("Average accurage: ", np.mean(svm_acc))
+
+# %%
+
+# train_feat, test_feat, train_lbls, test_lbls = train_test_split(train_feat, train_lbls, test_size=0.2, random_state=42)
+# trainArray, testArray, _,_ = train_test_split(trainArray, trainLbls, test_size=0.2, random_state=42)
+
+# fig, ax = plt.subplots(1,2, figsize=(8,3))
+# sns.countplot(train_lbls[:,1], ax=ax[0])
+# sns.countplot(test_lbls[:,1], ax=ax[1])
+
+# preprocess feature maps
+train_feat_flat = []
+for i in range(len(train_feat)):
+    train_feat_flat.append(train_feat[i].flatten())
+
+train_feat_flat, train_lbls = utils.shuffle(train_feat_flat, trainLbls, random_state=42)
+
+num_val_samples = int(np.ceil(len(trainArray) * 0.20))
+k = int(np.floor(len(trainArray) / num_val_samples))
+
+for i in range(k):
+    print("Training on fold K = ", i+1)
+    startPt = i * num_val_samples
+    endPt   = (i+1) * num_val_samples
+
+    if endPt > len(train_feat_flat):
+        endPt = len(train_feat_flat)
+
+    val_x = np.array(train_feat_flat[startPt:endPt])
+    val_y = train_lbls[startPt:endPt]
+    train_x = np.delete(train_feat_flat, np.linspace(startPt, endPt-1, num_val_samples).astype(np.int), axis=0)
+    train_y = np.delete(train_lbls, np.linspace(startPt, endPt-1, num_val_samples).astype(np.int), axis=0)
+
+    acc, pred = SVM_classifier(train_x, train_y, val_x, val_y)
+
+    print("======="*12, end="\n")
+# %%
