@@ -15,6 +15,7 @@ import PIL
 # import ML/DL libraries
 from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn import utils, svm, metrics # used to shuffle data
+from sklearn.ensemble import RandomForestClassifier
 
 from keras.preprocessing.image import ImageDataGenerator # used for image augmentation
 from tensorflow.keras.applications.inception_v3 import preprocess_input
@@ -32,13 +33,13 @@ from code_files.imagePreprocessing import *
 print('done importing libraries')
 
 # %%
-print('importing images...')
+# import images
 # ********************************
 #           IMPORT IMAGES
 # ********************************
 # import images (and labels) and store in dataframe
 # FLAG: set the path to the desired dataset
-data_path = 'datasets/handPD_orig_HT/'  
+data_path = 'datasets/handPD_bal_HT/'  
 
 trainImgs = pd.DataFrame()
 trainArray = []
@@ -87,15 +88,15 @@ print("Total number of images: ", numImgs)
 sns.countplot(trainLbls)
 
 # %%
-
+# Import Model
 # ******************************
 #         IMPORT MODEL
 # ******************************
 # import VGG16 or ResNet-50 pretrained model 
-model = ResNet50(weights='imagenet', include_top=False,input_shape=(224,224,3)) # setting include_top=False removes the fully connected layers of the model
-model.summary()
+model = VGG16(weights='imagenet', include_top=False,input_shape=(224,224,3)) # setting include_top=False removes the fully connected layers of the model
+# model.summary()
 
-# summarize feature map shapes
+# summarize feature map shapes # FLAG: can uncomment for feature visualization
 for i in range(len(model.layers)):
     layer=model.layers[i]
     # check for conv layer
@@ -108,17 +109,17 @@ for i in range(len(model.layers)):
 #     VISUALIZE FEATURE MAPS
 # ******************************
 # choose second conv block from each layer to display
-blocks = [10,28,50,80, 112, 132, 174]
+blocks = [4, 17]
 output_layers = [model.layers[i].output for i in blocks]
 # redefine model to output right after each conv layer
 vis_model = Model(inputs=model.inputs, outputs=output_layers)
 
 # select images to save visualizations for and put them in an array
 # manually choose two healthy and two parkinsons
-img2vis = np.array([trainArray[0], trainArray[8], trainArray[72], trainArray[88]])
+img2vis = np.array([trainArray[0], trainArray[1]])
 
 # iterate through each image and save the feature maps
-for i in range(4):
+for i in range(len(img2vis)):
     img = np.expand_dims(img2vis[i], axis=0)
     img = preprocess_input(img)
     feature_maps = vis_model.predict(img)
@@ -129,15 +130,15 @@ for i in range(4):
         # determine the number of images to plot
         if fmap_size[3]==64:
             rows=8;cols=8
-        # elif fmap_size[3]==128:
-        #     rows=16; cols=8
-        # elif fmap_size[3]==256:
-        #     rows=16;cols=16
+        elif fmap_size[3]==128:
+            rows=16; cols=8
+        elif fmap_size[3]==256:
+            rows=16;cols=16
         else:
-            rows=8;cols=8
+            rows=16;cols=32
 
         itr = 1
-        fig, ax = plt.subplots(rows,cols, figsize=(50,50))
+        fig, ax = plt.subplots(rows,cols, figsize=(75,75))
         title = 'Image_' + str(i) + 'fmap: ' + str(np.shape(fmap))
         fig.suptitle(title)
 
@@ -146,7 +147,8 @@ for i in range(4):
                 ax[r][c].imshow(fmap[0,:,:,itr-1], cmap='gray')
                 itr += 1
 
-        savename = 'Image_' + str(i) + '__block_' +  str(blocks[blocknum]) + '.png'
+        plt.tight_layout()
+        savename = 'Image_' + str(i) + '_block_' +  str(blocks[blocknum]) + '_vgg16_bal_HT.png'
         print(savename)
         fig.savefig(savename)
         plt.close()
@@ -181,7 +183,7 @@ fig.savefig(savename)
 plt.close()
 
 # %%
-
+# Extract Features
 # ******************************************************************************************************
 # ------------------------------------------------------------------------------------------------------
 #                                           CLASSIFICATION  
@@ -201,7 +203,7 @@ def extract_features(imgs, num_imgs):
     datagen = ImageDataGenerator(rescale=1./255) # define to rescale pixels in image
     batch_size = 32
     
-    features = np.zeros(shape=(num_imgs, 7,7,2048)) # shape equal to output of convolutional base
+    features = np.zeros(shape=(num_imgs, 7,7,2048)) # shape equal to output of convolutional base 
     lbls = np.zeros(shape=(num_imgs,2))
 
     # preprocess data
@@ -222,7 +224,7 @@ def extract_features(imgs, num_imgs):
 train_feat, train_lbls = extract_features(trainImgs, numImgs)
 
 # %%
-
+# split data
 # =============================
 #       VGG16 or ResNet50
 # =============================
@@ -234,6 +236,9 @@ fig, ax = plt.subplots(1,2, figsize=(8,3))
 sns.countplot(train_lbls[:,1], ax=ax[0])
 sns.countplot(test_lbls[:,1], ax=ax[1])
 
+
+#%% 
+# train pre-trained features
 # evaluate on VGG16 classifier (using cross validation)
 # define a function that will fit the model
 def defineModel(size): # size is the dimension of the last layer in the pretrained model
@@ -252,11 +257,11 @@ def defineModel(size): # size is the dimension of the last layer in the pretrain
 # will start with k-fold cross validation, taking 80% as training each fold
 
 # define model checkpoint callback
-model_chkpt = tf.keras.callbacks.ModelCheckpoint('20221130_rn50_kfold_handPD_bal_HT_bs32_rs42.h5', verbose=0, save_best_only=True)
+model_chkpt = tf.keras.callbacks.ModelCheckpoint('20221205_resnet50_kfold_handPD_orig_HT_bs32_rs42.h5', verbose=0, save_best_only=True)
 
 def fit_and_evaluate(train_feat, train_lbls, val_feat, val_lbls, epochs):
     model = None
-    model = defineModel(8) # FLAG: need to set the size based on the last layer
+    model = defineModel(7) # FLAG: need to set the size based on the last layer
     trained_model = model.fit(train_feat, train_lbls, batch_size=32, epochs=epochs, validation_data=(val_feat, val_lbls), callbacks=model_chkpt, verbose=0)
 
     # testScore = model.evaluate(test_feat, test_lbls)
@@ -288,12 +293,15 @@ for i in range(k):
     print("======="*12, end="\n")
 
 # %%
-
+# evaluate results
 # ...............
 # VIEW RESULTS
 # ...............   
 
-new_model = True # FLAG
+new_model = False # FLAG
+
+num_val_samples = int(np.ceil(len(trainArray) * 0.20))
+k = int(np.floor(len(trainArray) / num_val_samples))
 
 if new_model==True:
     # plot the accuracy and loss functions for each fold
@@ -327,10 +335,9 @@ def importModel(filename, testAug, testAugLabel):
     return testModel
 
 # load existing model and evaluate the test data
-testmodel = importModel('20221130_rn50_kfold_handPD_bal_HT_bs32_rs42.h5', test_feat, test_lbls)
+testmodel = importModel('20221205_resnet50_kfold_handPD_orig_HT_bs32_rs42.h5', test_feat, test_lbls)
 
 # %%
-
 # SHOW THE MISCLASSIFIED IMAGES
 
 def plotMisclassImgs(testModel, test_feat, test_label, test_array):
@@ -367,6 +374,7 @@ def plotMisclassImgs(testModel, test_feat, test_label, test_array):
 misClass_test, misClass_idx, predictions = plotMisclassImgs(testmodel, test_feat, np.argmax(test_lbls, axis=1), testArray)
 
 # %%
+# Define SVM model
 # =============================
 #             SVM
 # =============================
@@ -376,7 +384,7 @@ def SVM_classifier(train_data, train_labels, val_data, val_labels):
 
     # clf = svm.SVC(kernel='poly', degree=5)
     # param_grid={'C':[0.1,5,10,100],'degree':[2,5,7,10],'kernel':['rbf','poly']}
-    clf = svm.SVC(kernel='rbf', C=.1)
+    clf = svm.SVC(kernel='rbf', C=10)
     # clf = GridSearchCV(clf, param_grid)
 
     # train model
@@ -398,22 +406,8 @@ def SVM_classifier(train_data, train_labels, val_data, val_labels):
 
     return acc, pred
 
-# svm_acc = []
-
-# for ii in range(0,10):
-#     temp_acc, svm_pred = SVM_classifier(train_feat_flat, train_lbls)
-#     svm_acc.append(temp_acc)
-
-# print("Average accurage: ", np.mean(svm_acc))
-
 # %%
-
-# train_feat, test_feat, train_lbls, test_lbls = train_test_split(train_feat, train_lbls, test_size=0.2, random_state=42)
-# trainArray, testArray, _,_ = train_test_split(trainArray, trainLbls, test_size=0.2, random_state=42)
-
-# fig, ax = plt.subplots(1,2, figsize=(8,3))
-# sns.countplot(train_lbls[:,1], ax=ax[0])
-# sns.countplot(test_lbls[:,1], ax=ax[1])
+# run  SVM
 
 # preprocess feature maps
 train_feat_flat = []
@@ -424,6 +418,9 @@ train_feat_flat, train_lbls = utils.shuffle(train_feat_flat, trainLbls, random_s
 
 num_val_samples = int(np.ceil(len(trainArray) * 0.20))
 k = int(np.floor(len(trainArray) / num_val_samples))
+
+
+svm_acc = []
 
 for i in range(k):
     print("Training on fold K = ", i+1)
@@ -439,6 +436,59 @@ for i in range(k):
     train_y = np.delete(train_lbls, np.linspace(startPt, endPt-1, num_val_samples).astype(np.int), axis=0)
 
     acc, pred = SVM_classifier(train_x, train_y, val_x, val_y)
+    svm_acc.append(acc)
 
     print("======="*12, end="\n")
+
+print("Average accuracy: ", np.mean(svm_acc))
+
+# %%
+# Run random forest
+# =============================
+#             RF
+# =============================
+
+# preprocess feature maps
+train_feat_flat = []
+for i in range(len(train_feat)):
+    train_feat_flat.append(train_feat[i].flatten())
+
+train_feat_flat, train_lbls = utils.shuffle(train_feat_flat, trainLbls, random_state=42)
+
+num_val_samples = int(np.ceil(len(trainArray) * 0.20))
+k = int(np.floor(len(trainArray) / num_val_samples))
+
+
+rf_acc = []
+
+n = [50,100,200]
+for j in n:
+    for i in range(k):
+        # print("Training on fold K = ", i+1)
+        startPt = i * num_val_samples
+        endPt   = (i+1) * num_val_samples
+
+        if endPt > len(train_feat_flat):
+            endPt = len(train_feat_flat)
+
+        val_x = np.array(train_feat_flat[startPt:endPt])
+        val_y = train_lbls[startPt:endPt]
+        train_x = np.delete(train_feat_flat, np.linspace(startPt, endPt-1, num_val_samples).astype(np.int), axis=0)
+        train_y = np.delete(train_lbls, np.linspace(startPt, endPt-1, num_val_samples).astype(np.int), axis=0)
+
+        
+        clf = RandomForestClassifier(n_estimators=j)
+        clf.fit(train_x, train_y)
+
+        y_pred = clf.predict(val_x)
+
+        acc = metrics.accuracy_score(val_y, y_pred)
+        rf_acc.append(acc)
+        print("Accuracy: ", acc)
+
+    print("n_estimators = ",j)
+    print("Average accuracy: ", np.mean(rf_acc))
+    print("-------"*12, end="\n")
+
+
 # %%
