@@ -16,6 +16,10 @@ import PIL
 from sklearn.model_selection import train_test_split, GridSearchCV
 from sklearn import utils, svm, metrics # used to shuffle data
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import confusion_matrix, classification_report
+from sklearn.naive_bayes import GaussianNB
+from tf_explain.core.grad_cam import GradCAM
+
 
 from keras.preprocessing.image import ImageDataGenerator # used for image augmentation
 from tensorflow.keras.applications.inception_v3 import preprocess_input
@@ -39,7 +43,7 @@ print('done importing libraries')
 # ********************************
 # import images (and labels) and store in dataframe
 # FLAG: set the path to the desired dataset
-data_path = 'datasets/handPD_bal_HT/'  
+data_path = 'datasets/handPD_orig_HT/'  
 
 trainImgs = pd.DataFrame()
 trainArray = []
@@ -114,9 +118,11 @@ output_layers = [model.layers[i].output for i in blocks]
 # redefine model to output right after each conv layer
 vis_model = Model(inputs=model.inputs, outputs=output_layers)
 
+train_feat, test_feat, train_lbls, test_lbls = train_test_split(trainArray, trainLbls, test_size=0.2, random_state=42)
+
 # select images to save visualizations for and put them in an array
 # manually choose two healthy and two parkinsons
-img2vis = np.array([trainArray[0], trainArray[1]])
+img2vis = np.array([test_feat[0], test_feat[1]])
 
 # iterate through each image and save the feature maps
 for i in range(len(img2vis)):
@@ -148,7 +154,7 @@ for i in range(len(img2vis)):
                 itr += 1
 
         plt.tight_layout()
-        savename = 'Image_' + str(i) + '_block_' +  str(blocks[blocknum]) + '_vgg16_bal_HT.png'
+        savename = 'Image_' + str(i) + '_block_' +  str(blocks[blocknum]) + '_vgg16_orig_HT.png'
         print(savename)
         fig.savefig(savename)
         plt.close()
@@ -203,7 +209,7 @@ def extract_features(imgs, num_imgs):
     datagen = ImageDataGenerator(rescale=1./255) # define to rescale pixels in image
     batch_size = 32
     
-    features = np.zeros(shape=(num_imgs, 7,7,2048)) # shape equal to output of convolutional base 
+    features = np.zeros(shape=(num_imgs, 7,7,512)) # shape equal to output of convolutional base 
     lbls = np.zeros(shape=(num_imgs,2))
 
     # preprocess data
@@ -332,10 +338,21 @@ def importModel(filename, testAug, testAugLabel):
     loss, acc = testModel.evaluate(np.array(testAug), testAugLabel, verbose=2)
     print("Loss: ", loss, "| Accuracy: ", acc)
 
+    # classification report
+    pred = testModel.predict(np.array(testAug))
+    pred = np.argmax(pred, axis=1)
+    label_pred = np.argmax(testAugLabel, axis=1)
+    print(classification_report(label_pred, pred))
+
+    # confusion matrix
+    cmat = confusion_matrix(label_pred, pred)
+    print(cmat)
+
+
     return testModel
 
 # load existing model and evaluate the test data
-testmodel = importModel('20221205_resnet50_kfold_handPD_orig_HT_bs32_rs42.h5', test_feat, test_lbls)
+testmodel = importModel('20221205_vgg16_kfold_handPD_bal_HT_bs32_rs42.h5', test_feat, test_lbls)
 
 # %%
 # SHOW THE MISCLASSIFIED IMAGES
@@ -399,12 +416,14 @@ def SVM_classifier(train_data, train_labels, val_data, val_labels):
 
     # calculate accuracy
     acc = round(metrics.accuracy_score(pred, val_labels),4)
-
-    print("The predicted data is: ", pred)
-    print("The actual data is: ", np.array(val_labels))
+    tn, fp, fn, tp = confusion_matrix(val_labels, pred).ravel()
+    
+    print('tn, fp, fn, tp', (tn, fp, fn, tp))
+    # print("The predicted data is: ", pred)
+    # print("The actual data is: ", np.array(val_labels))
     print(f"The model is {acc*100}% accurate")
 
-    return acc, pred
+    return acc, pred, tn, fp, fn, tp
 
 # %%
 # run  SVM
@@ -421,6 +440,7 @@ k = int(np.floor(len(trainArray) / num_val_samples))
 
 
 svm_acc = []
+tn=[]; fp=[]; fn=[]; tp=[]
 
 for i in range(k):
     print("Training on fold K = ", i+1)
@@ -435,12 +455,17 @@ for i in range(k):
     train_x = np.delete(train_feat_flat, np.linspace(startPt, endPt-1, num_val_samples).astype(np.int), axis=0)
     train_y = np.delete(train_lbls, np.linspace(startPt, endPt-1, num_val_samples).astype(np.int), axis=0)
 
-    acc, pred = SVM_classifier(train_x, train_y, val_x, val_y)
+    acc, pred, tn, fp, fn, tp = SVM_classifier(train_x, train_y, val_x, val_y)
     svm_acc.append(acc)
+    tn = np.append(tn, tn)
+    fp = np.append(fp, fp)
+    fn = np.append(fn, fn)
+    tp = np.append(tp, tp)
 
     print("======="*12, end="\n")
 
 print("Average accuracy: ", np.mean(svm_acc))
+print("Confusion matrix: (tn, fp, fn, tp)", (np.mean(tn), np.mean(fp), np.mean(fn), np.mean(tp)))
 
 # %%
 # Run random forest
@@ -460,6 +485,7 @@ k = int(np.floor(len(trainArray) / num_val_samples))
 
 
 rf_acc = []
+tn=[]; fp=[]; fn=[]; tp=[]
 
 n = [50,100,200]
 for j in n:
@@ -483,12 +509,107 @@ for j in n:
         y_pred = clf.predict(val_x)
 
         acc = metrics.accuracy_score(val_y, y_pred)
+        tn, fp, fn, tp = confusion_matrix(val_y, y_pred).ravel()
+
         rf_acc.append(acc)
+        tn = np.append(tn, tn)
+        fp = np.append(fp, fp)
+        fn = np.append(fn, fn)
+        tp = np.append(tp, tp)
         print("Accuracy: ", acc)
 
     print("n_estimators = ",j)
     print("Average accuracy: ", np.mean(rf_acc))
+    print("Confusion matrix: (tn, fp, fn, tp)", (np.mean(tn), np.mean(fp), np.mean(fn), np.mean(tp)))
     print("-------"*12, end="\n")
 
 
+# %%
+# Run Naive Bayes
+# =============================
+#          Naive Bayes
+# =============================
+train_feat_flat = []
+for i in range(len(train_feat)):
+    train_feat_flat.append(train_feat[i].flatten())
+
+train_feat_flat, train_lbls = utils.shuffle(train_feat_flat, trainLbls, random_state=42)
+
+num_val_samples = int(np.ceil(len(trainArray) * 0.20))
+k = int(np.floor(len(trainArray) / num_val_samples))
+
+nb_acc = []
+for i in range(k):
+    print("Training on fold K = ", i+1)
+    startPt = i * num_val_samples
+    endPt   = (i+1) * num_val_samples
+
+    if endPt > len(train_feat_flat):
+        endPt = len(train_feat_flat)
+
+    val_x = np.array(train_feat_flat[startPt:endPt])
+    val_y = train_lbls[startPt:endPt]
+    train_x = np.delete(train_feat_flat, np.linspace(startPt, endPt-1, num_val_samples).astype(np.int), axis=0)
+    train_y = np.delete(train_lbls, np.linspace(startPt, endPt-1, num_val_samples).astype(np.int), axis=0)
+
+    clf = GaussianNB()
+    clf.fit(train_x, train_y)
+    y_pred = clf.predict(val_x)
+
+    acc = ((val_y == y_pred).sum()/val_x.shape[0])
+    tn, fp, fn, tp = confusion_matrix(val_y, y_pred).ravel()
+
+    nb_acc.append(acc)
+    tn = np.append(tn, tn)
+    fp = np.append(fp, fp)
+    fn = np.append(fn, fn)
+    tp = np.append(tp, tp)
+    print("Accuracy: %f" % acc)
+    print("Number of mislabeled points out of a total %d points : %d" % (val_x.shape[0], (val_y != y_pred).sum()))
+    print("======="*12, end="\n")
+
+print('Average accuracy: ', np.mean(nb_acc))
+print("Confusion matrix: (tn, fp, fn, tp)", (np.mean(tn), np.mean(fp), np.mean(fn), np.mean(tp)))
+
+# %%
+# Run GradCAM
+
+# ***************************
+#          GradCAM
+# ***************************
+
+# split into same training and testing sets as was trained on (random_state=42)
+train_feat, test_feat, train_lbls, test_lbls = train_test_split(trainArray, trainLbls, test_size=0.2, random_state=42)
+# trainArray, testArray, _,_ = train_test_split(trainArray, trainLbls, test_size=0.2, random_state=42)
+def run_gradcam(model, img, class_index, fname, layer_name):
+    img = tf.keras.preprocessing.image.img_to_array(img)
+    data = ([img], None)
+    explainer = GradCAM()
+    grid = explainer.explain(data, model, class_index=class_index, layer_name=layer_name)
+    explainer.save(grid, ".", fname)
+    #return explainer
+
+
+test_imgs_to_visualize = [test_feat[4], test_feat[5], test_feat[9], test_feat[11]] # first image is PD, second = healthy
+
+layer2 = 'block2_conv1'
+layer5 = 'block5_conv3'
+flag_orig = False  # True if contains ST
+model_orig = tf.keras.models.load_model('20221202_vgg16_kfold_handPD_orig_rs42.h5')
+model_HT = tf.keras.models.load_model('20221202_vgg16_kfold_handPD_orig_HT_rs42.h5') # ST removed
+if (flag_orig):
+    model = model_orig
+    inc_HT = ''
+else:
+    model = model_HT
+    inc_HT = '_HT_'
+
+run_gradcam(model, test_imgs_to_visualize[0], class_index=1, fname='gradcam_img4_orig_'+inc_HT+'block2_rs42.png', layer_name=layer2)
+run_gradcam(model, test_imgs_to_visualize[0], class_index=1, fname='gradcam_img4_orig_'+inc_HT+'block5_rs42.png', layer_name=layer5)
+run_gradcam(model, test_imgs_to_visualize[1], class_index=1, fname='gradcam_img5_orig_'+inc_HT+'block2_rs42.png', layer_name=layer2)
+run_gradcam(model, test_imgs_to_visualize[1], class_index=1, fname='gradcam_img5_orig_'+inc_HT+'block5_rs42.png', layer_name=layer5)
+run_gradcam(model, test_imgs_to_visualize[2], class_index=1, fname='gradcam_img9_orig_'+inc_HT+'block2_rs42.png', layer_name=layer2)
+run_gradcam(model, test_imgs_to_visualize[2], class_index=1, fname='gradcam_img9_orig_'+inc_HT+'block5_rs42.png', layer_name=layer5)
+run_gradcam(model, test_imgs_to_visualize[3], class_index=1, fname='gradcam_img11_orig_'+inc_HT+'block2_rs42.png', layer_name=layer2)
+run_gradcam(model, test_imgs_to_visualize[3], class_index=1, fname='gradcam_img11_orig_'+inc_HT+'block5_rs42.png', layer_name=layer5)
 # %%
