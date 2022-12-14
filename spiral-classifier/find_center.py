@@ -4,7 +4,9 @@ import matplotlib.pyplot as plt
 import os
 import numpy as np
 
-imgPath = 'C:/Users/Rebecca/Documents/Virginia_Tech/Research/database-images/database-images/skel/spiral/parkinson/skel_1_3_PE082.jpg' #dir + '/datasets/folador_skeletonize/skeletons/waves/skel_V03HO03.png'
+dir = os.getcwd()
+# imgPath = dir + '/spiral-classifier/skel_1_6_PE0107.jpg'
+imgPath = 'C:/Users/Rebecca/Documents/Virginia_Tech/Research/database-images/database-images/skel/spiral/skel_1_14_PE0184.jpg' #dir + '/datasets/folador_skeletonize/skeletons/waves/skel_V03HO03.png'
 img = cv2.imread(imgPath, 1)
 img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
