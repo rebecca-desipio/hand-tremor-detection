@@ -108,7 +108,6 @@ for i in range(len(model.layers)):
         print(i, layer.name, layer.output.shape)
 
 # %%
-
 # ******************************
 #     VISUALIZE FEATURE MAPS
 # ******************************
@@ -279,7 +278,6 @@ epochs = 250
 
 num_val_samples = int(np.ceil(len(trainArray) * 0.20))
 k = int(np.floor(len(trainArray) / num_val_samples))
-
 for i in range(k):
     print("Training on fold K = ", i+1)
     startPt = i * num_val_samples
